@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(node test-scrape.js:*)",
+      "Bash(node populate-players-quick.js:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

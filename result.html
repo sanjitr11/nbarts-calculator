@@ -7,10 +7,10 @@
   <body>
     <h1>NBA Career rTS% Calculator</h1>
 
-    <div id="result-container"></div>
     <div id="loading-message" style="display: none;">
       Loading content...
     </div>
+    <div id="result-container" class="tables-container"></div>
     <br>
     <button class="btn" id="btn2">Return to home</button>
     <script>
@@ -91,27 +91,45 @@
       var regularSeasonData = urlParams.get('regularSeasonData') ? JSON.parse(urlParams.get('regularSeasonData')) : {};
       var playoffsData = urlParams.get('playoffsData') ? JSON.parse(urlParams.get('playoffsData')) : {};
 
+      console.log('URL params:', window.location.search);
+      console.log('showRegularSeason:', showRegularSeason);
+      console.log('showPlayoffs:', showPlayoffs);
+      console.log('regularSeasonData:', regularSeasonData);
+      console.log('playoffsData:', playoffsData);
+
       var resultContainer = document.getElementById('result-container');
 
       // Function to generate regular season table
       function generateRegularSeasonTable() {
         if (showRegularSeason && Object.keys(regularSeasonData).length > 0) {
-          var regularSeasonTable = generateTable(regularSeasonData);
+          var tableWrapper = document.createElement('div');
+          tableWrapper.className = 'table-wrapper';
+
           var regularSeasonHeading = document.createElement('h2');
           regularSeasonHeading.textContent = 'Regular Season Data';
-          resultContainer.appendChild(regularSeasonHeading);
-          resultContainer.appendChild(regularSeasonTable);
+
+          var regularSeasonTable = generateTable(regularSeasonData);
+
+          tableWrapper.appendChild(regularSeasonHeading);
+          tableWrapper.appendChild(regularSeasonTable);
+          resultContainer.appendChild(tableWrapper);
         }
       }
 
       // Function to generate playoffs table
       function generatePlayoffsTable() {
         if (showPlayoffs && Object.keys(playoffsData).length > 0) {
-          var playoffsTable = generateTable(playoffsData);
+          var tableWrapper = document.createElement('div');
+          tableWrapper.className = 'table-wrapper';
+
           var playoffsHeading = document.createElement('h2');
           playoffsHeading.textContent = 'Playoffs Data';
-          resultContainer.appendChild(playoffsHeading);
-          resultContainer.appendChild(playoffsTable);
+
+          var playoffsTable = generateTable(playoffsData);
+
+          tableWrapper.appendChild(playoffsHeading);
+          tableWrapper.appendChild(playoffsTable);
+          resultContainer.appendChild(tableWrapper);
         }
       }
 
@@ -123,6 +141,15 @@
         generateRegularSeasonTable();
         generatePlayoffsTable();
         hideLoadingMessage();
+
+        // Check if any data was displayed
+        if (resultContainer.children.length === 0) {
+          var noDataMessage = document.createElement('p');
+          noDataMessage.textContent = 'No data to display. Please go back and try again.';
+          noDataMessage.style.color = '#674d32';
+          noDataMessage.style.textAlign = 'center';
+          resultContainer.appendChild(noDataMessage);
+        }
       }, 1000);
 
       var button2 = document.getElementById("btn2");

@@ -9,16 +9,16 @@
     <title>NBA Relative True Shooting % (rTS%) Calculator</title>
 </head>
 <body>
-    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <h1>NBA Career rTS% Calculator</h1>
-    <div class="inputBox">
-        <input type="text" id="fname" required="required" placeholder="ex. 'Kobe'">
-        <span>First Name</span>
+
+    <div class="search-container">
+        <div class="inputBox">
+            <input type="text" id="playerSearch" required="required" placeholder="ex. 'Kobe Bryant'" autocomplete="off">
+            <span>Player Name</span>
+        </div>
+        <div id="autocomplete-results" class="autocomplete-results"></div>
     </div>
-    <div class="inputBox">
-        <input type="text" id="lname" required="required" placeholder="ex. 'Bryant'">
-        <span>Last Name</span>
-    </div>
+
     <div class="checkbox-container" id="rs">
         <input type="checkbox" id="cb1">
         <label for="cb1">Regular Season</label>
@@ -29,7 +29,6 @@
     </div>
     <br>
     <button class="btn" id="btn">Submit</button>
-    <script src= "nbarts.js"></script>
+    <script src="nbarts.js"></script>
 </body>
 </html>
-

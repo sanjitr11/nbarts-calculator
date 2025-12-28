@@ -1,178 +1,144 @@
 const button = document.getElementById("btn");
+const playerSearch = document.getElementById("playerSearch");
+const autocompleteResults = document.getElementById("autocomplete-results");
 
-button.addEventListener('click', () => {
-  var firstName = document.getElementById("fname").value.trim().toLowerCase();
-  var lastName = document.getElementById("lname").value.trim().toLowerCase();
+let selectedPlayer = null;
+let debounceTimer = null;
 
-  if (firstName.length === 0 || lastName.length === 0) {
-    alert("Please fill out the required fields.");
+// Autocomplete search
+playerSearch.addEventListener('input', (e) => {
+  const searchTerm = e.target.value.trim();
+
+  clearTimeout(debounceTimer);
+
+  if (searchTerm.length < 2) {
+    autocompleteResults.classList.remove('show');
     return;
+  }
+
+  debounceTimer = setTimeout(async () => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/players/search?q=${encodeURIComponent(searchTerm)}`);
+      const players = await response.json();
+
+      if (players.length === 0) {
+        autocompleteResults.innerHTML = '<div class="autocomplete-item">No players found</div>';
+        autocompleteResults.classList.add('show');
+        return;
+      }
+
+      autocompleteResults.innerHTML = players
+        .map(player => `
+          <div class="autocomplete-item" data-player='${JSON.stringify(player)}'>
+            ${player.full_name}
+          </div>
+        `)
+        .join('');
+
+      autocompleteResults.classList.add('show');
+
+      // Add click handlers
+      document.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const playerData = item.getAttribute('data-player');
+          if (playerData && playerData !== 'undefined') {
+            selectedPlayer = JSON.parse(playerData);
+            playerSearch.value = selectedPlayer.full_name;
+            autocompleteResults.classList.remove('show');
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Error fetching autocomplete results:', error);
+    }
+  }, 300);
+});
+
+// Close autocomplete when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-container')) {
+    autocompleteResults.classList.remove('show');
+  }
+});
+
+button.addEventListener('click', async () => {
+  const searchInput = playerSearch.value.trim();
+
+  if (searchInput.length === 0) {
+    alert("Please enter a player name.");
+    return;
+  }
+
+  // If no player was selected from autocomplete, try to parse the input
+  let firstName, lastName;
+
+  if (selectedPlayer) {
+    firstName = selectedPlayer.first_name;
+    lastName = selectedPlayer.last_name;
+  } else {
+    // Try to parse the input as "First Last"
+    const nameParts = searchInput.split(' ');
+    if (nameParts.length < 2) {
+      alert("Please enter both first and last name, or select a player from the dropdown.");
+      return;
+    }
+    lastName = nameParts[nameParts.length - 1];
+    firstName = nameParts.slice(0, -1).join(' ');
   }
 
   var rsCheck = document.getElementById("cb1");
   var psCheck = document.getElementById("cb2");
-  let errorAlertDisplayed = false; 
 
-  // Function to introduce a random delay
-  function randomDelay() {
-    return Math.floor(Math.random() * 3000) + 1000; // Random delay between 1000ms and 4000ms
+  if (!rsCheck.checked && !psCheck.checked) {
+    alert("Please select at least one season type (Regular Season or Post Season).");
+    return;
   }
 
-  // Function to fetch regular season data with random delay
-  function fetchRegularSeasonData() {
-    return new Promise((resolve, reject) => {
-      if (rsCheck.checked) {
-        const playerUrl = `https://www.basketball-reference.com/players/${lastName.charAt(0)}/${lastName.toLowerCase().slice(0, 5)}${firstName.toLowerCase().slice(0, 2)}01.html`;
+  // Disable button and show loading state
+  button.disabled = true;
+  button.textContent = "Loading...";
 
-        // Introduce a random delay before making the request
-        setTimeout(() => {
-          axios.get(playerUrl)
-            .then(playerResponse => {
-              const parser = new DOMParser();
-              const $player = parser.parseFromString(playerResponse.data, 'text/html');
+  try {
+    // Call backend API
+    const response = await fetch(
+      `http://localhost:3000/api/player/${encodeURIComponent(firstName)}/${encodeURIComponent(lastName)}?regular=${rsCheck.checked}&playoffs=${psCheck.checked}`
+    );
 
-              const rsTableRows = $player.querySelectorAll('#div_advanced tbody tr');
-              const rsSeasons = Array.from(rsTableRows).map(element => element.querySelector('th[data-stat="season"]').textContent);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch player data');
+    }
 
-              const rsLeaguePromises = rsSeasons.map(season => {
-                const leagueUrl = `https://www.basketball-reference.com/leagues/NBA_${parseInt(season.split('-')[0]) + 1}.html`;
+    const data = await response.json();
 
-                return axios.get(leagueUrl)
-                  .then(leagueResponse => {
-                    const $league = parser.parseFromString(leagueResponse.data, 'text/html');
-                    const leagueAverageTS = $league.querySelector('tfoot tr td[data-stat="ts_pct"]').textContent;
-                    return parseFloat(leagueAverageTS);
-                  })
-                  .catch(error => {
-                    console.log('An error occurred while fetching league data:', error);
-                    return null;
-                  });
-              });
+    console.log('Received data from backend:', data);
+    console.log('Regular season data:', data.regularSeasonData);
+    console.log('Playoffs data:', data.playoffsData);
 
-              Promise.all(rsLeaguePromises)
-                .then(leagueAverageTSs => {
-                  const regularSeasonData = {};
+    // Redirect to result page with data
+    redirectForResultPage(
+      data.regularSeasonData,
+      data.playoffsData,
+      rsCheck.checked,
+      psCheck.checked
+    );
+  } catch (error) {
+    console.error('Error fetching player data:', error);
 
-                  rsTableRows.forEach((element, index) => {
-                    const season = rsSeasons[index];
-                    const playerTS = element.querySelector('td[data-stat="ts_pct"]').textContent;
-                    const leagueAverageTS = leagueAverageTSs[index];
-
-                    regularSeasonData[season] = {
-                      playerTS: parseFloat(playerTS),
-                      leagueAverageTS: leagueAverageTS,
-                    };
-                  });
-
-                  resolve(regularSeasonData);
-                });
-            })
-            .catch(error => {
-              console.log('An error occurred while fetching player data:', error);
-              if (error.response && error.response.status === 429) {
-                if (!errorAlertDisplayed) {
-                  alert("Basketball Reference has blocked the requests. Please wait and try again later.");
-                  errorAlertDisplayed = true; // Set the flag to true to prevent duplicate alerts
-                }
-              } else {
-                if (!errorAlertDisplayed) {
-                  alert("Player page not found or an error occurred. Please check the entered names.");
-                  errorAlertDisplayed = true; // Set the flag to true to prevent duplicate alerts
-                }
-              }
-              resolve(null);
-            });
-        }, randomDelay());
-      } else {
-        resolve(null);
-      }
-    });
+    if (error.message.includes('Player not found')) {
+      alert("Player page not found. Please check the entered names and try again.");
+    } else if (error.message.includes('Too many requests')) {
+      alert("Too many requests. Please wait a moment and try again.");
+    } else if (error.message.includes('Failed to fetch')) {
+      alert("Could not connect to server. Make sure the backend server is running on port 3000.");
+    } else {
+      alert("An error occurred while fetching data. Please try again.");
+    }
+  } finally {
+    // Re-enable button
+    button.disabled = false;
+    button.textContent = "Submit";
   }
-
-  // Function to fetch playoffs data with random delay
-  function fetchPlayoffsData() {
-    return new Promise((resolve, reject) => {
-      if (psCheck.checked) {
-        const playerUrl = `https://www.basketball-reference.com/players/${lastName.charAt(0)}/${lastName.toLowerCase().slice(0, 5)}${firstName.toLowerCase().slice(0, 2)}01.html`;
-
-        // Introduce a random delay before making the request
-        setTimeout(() => {
-          axios.get(playerUrl)
-            .then(playerResponse => {
-              const parser = new DOMParser();
-              const $player = parser.parseFromString(playerResponse.data, 'text/html');
-
-              const psTableRows = $player.querySelectorAll('#div_playoffs_advanced tbody tr');
-              const psSeasons = Array.from(psTableRows).map(element => element.querySelector('th[data-stat="season"]').textContent);
-
-              const psLeaguePromises = psSeasons.map(season => {
-                const leagueUrl = `https://www.basketball-reference.com/playoffs/NBA_${parseInt(season.split('-')[0]) + 1}.html`;
-
-                return axios.get(leagueUrl)
-                  .then(leagueResponse => {
-                    const $league = parser.parseFromString(leagueResponse.data, 'text/html');
-                    const leagueAverageTS = $league.querySelector('tfoot tr td[data-stat="ts_pct"]').textContent;
-                    return parseFloat(leagueAverageTS);
-                  })
-                  .catch(error => {
-                    console.log('An error occurred while fetching league data:', error);
-                    return null;
-                  });
-              });
-
-              Promise.all(psLeaguePromises)
-                .then(leagueAverageTSs => {
-                  const playoffsData = {};
-
-                  psTableRows.forEach((element, index) => {
-                    const season = psSeasons[index];
-                    const playerTS = element.querySelector('td[data-stat="ts_pct"]').textContent;
-                    const leagueAverageTS = leagueAverageTSs[index];
-
-                    playoffsData[season] = {
-                      playerTS: parseFloat(playerTS),
-                      leagueAverageTS: leagueAverageTS,
-                    };
-                  });
-
-                  resolve(playoffsData);
-                });
-            })
-            .catch(error => {
-              console.log('An error occurred while fetching player data:', error);
-              if (error.response && error.response.status === 429) {
-                if (!errorAlertDisplayed) {
-                  alert("Basketball Reference has blocked the requests. Please wait and try again later.");
-                  errorAlertDisplayed = true; // Set the flag to true to prevent duplicate alerts
-                }
-              } else {
-                if (!errorAlertDisplayed) {
-                  alert("Player page not found or an error occurred. Please check the entered names.");
-                  errorAlertDisplayed = true; // Set the flag to true to prevent duplicate alerts
-                }
-              }
-              resolve(null);
-            });
-        }, randomDelay());
-      } else {
-        resolve(null);
-      }
-    });
-  }
-
-  // Wait for both regular season and playoffs data retrieval to complete
-  Promise.all([fetchRegularSeasonData(), fetchPlayoffsData()])
-    .then(([regularSeasonData, playoffsData]) => {
-      // Call redirectForResultPage here after both regularSeasonData and playoffsData are ready
-      redirectForResultPage(regularSeasonData, playoffsData, rsCheck.checked, psCheck.checked);
-    })
-    .catch(error => {
-      console.log('An error occurred:', error);
-      if (!errorAlertDisplayed) {
-        alert("Error occurred while processing data. Please try again.");
-        errorAlertDisplayed = true; // Set the flag to true to prevent duplicate alerts
-      }
-    });
 });
 
 function redirectForResultPage(regularSeasonData, playoffsData, showRegularSeason, showPlayoffs) {
@@ -180,11 +146,11 @@ function redirectForResultPage(regularSeasonData, playoffsData, showRegularSeaso
   urlParams.set('showRegularSeason', showRegularSeason ? 'true' : 'false');
   urlParams.set('showPlayoffs', showPlayoffs ? 'true' : 'false');
 
-  if (showRegularSeason) {
+  if (showRegularSeason && regularSeasonData) {
     urlParams.set('regularSeasonData', JSON.stringify(regularSeasonData));
   }
 
-  if (showPlayoffs && Object.keys(playoffsData).length > 0) {
+  if (showPlayoffs && playoffsData && Object.keys(playoffsData).length > 0) {
     urlParams.set('playoffsData', JSON.stringify(playoffsData));
   }
 
@@ -192,7 +158,3 @@ function redirectForResultPage(regularSeasonData, playoffsData, showRegularSeaso
   const url = queryString ? `result.html?${queryString}` : 'result.html';
   window.location.href = url;
 }
-
-  
-  
-
